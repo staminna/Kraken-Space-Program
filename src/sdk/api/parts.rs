@@ -137,6 +137,9 @@ fn parse_part(table: &Table, asset_dir: &str) -> mlua::Result<PartDefinition> {
         drag_coefficient: table
             .get::<Option<f64>>("drag_coefficient")?
             .unwrap_or(DEFAULT_DRAG_COEFFICIENT),
+        drag_radius_m: table
+            .get::<Option<f64>>("drag_radius")?
+            .unwrap_or(shape.radius_m),
         geometry,
         attach_nodes,
         modules,

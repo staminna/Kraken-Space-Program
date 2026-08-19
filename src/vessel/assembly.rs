@@ -226,7 +226,6 @@ fn spawn_part(
 ) -> (Entity, Entity) {
     let half_height =
         ((top_of(definition).y - bottom_of(definition)) / 2.0 - COLLIDER_GAP_M).max(0.05);
-    let radius = definition.shape.radius_m;
     // The part's origin is not necessarily its geometric centre — the Spark's nodes run
     // from 0 to -0.5 — so the collider is offset to sit between the nodes rather than
     // straddling the origin.
@@ -269,9 +268,10 @@ fn spawn_part(
                 Ccd::enabled(),
                 // Impact damage listens for these — see `physics::impact`.
                 ActiveEvents::COLLISION_EVENTS,
-                // Frontal area from the part's own radius; the coefficient comes from Lua.
+                // The disc this part presents to the airflow. How much of it is actually
+                // exposed is decided per tick — see `celestial::occlusion`.
                 DragSurface {
-                    area_m2: std::f64::consts::PI * radius * radius,
+                    radius_m: definition.drag_radius_m,
                     cd: definition.drag_coefficient,
                 },
                 // Rapier only writes mass properties back into a component that already

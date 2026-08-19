@@ -14,11 +14,15 @@
 //! Replacing it with sampled curves later changes [`Atmosphere::density_at`] and nothing
 //! else — every consumer already goes through it.
 
+use bevy::math::DVec3;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
 use crate::celestial::body::CelestialBody;
+use crate::celestial::occlusion;
 use crate::physics::forces::PendingForces;
 use crate::rendering::render_sync::{SimPosition, SimVelocity};
+use crate::vessel::components::VesselId;
 
 /// A body's atmosphere.
 #[derive(Resource, Debug, Clone, Copy)]
@@ -80,8 +84,10 @@ impl Atmosphere {
 /// coefficient × dynamic pressure, not CFD."
 #[derive(Component, Debug, Clone, Copy)]
 pub struct DragSurface {
-    /// Frontal cross-section, m².
-    pub area_m2: f64,
+    /// Radius of the disc this part presents to the airflow, metres. The *exposed* fraction
+    /// of that disc is worked out per tick by [`crate::celestial::occlusion`] — a part
+    /// tucked in behind another one contributes nothing.
+    pub radius_m: f64,
     /// Drag coefficient, dimensionless.
     pub cd: f64,
 }
@@ -90,17 +96,18 @@ pub struct DragSurface {
 ///
 /// `F = ½ · ρ · v² · Cd · A`, opposing the velocity vector.
 ///
-/// # What this does not model
+/// # Shielding
 ///
-/// Occlusion. Every part presents its full frontal area, so a five-part stack has five
-/// times the drag of its nose cone — the parts behind the first one are not shadowed by it.
-/// KSP1 has the same problem and shipped with it for years. Fixing it properly means
-/// deciding which parts are exposed along the velocity vector, which is a real piece of
-/// work and is logged as tech debt rather than guessed at here.
+/// Only the exposed part of each disc counts — see [`crate::celestial::occlusion`]. Drag is
+/// therefore a per-*vessel* calculation even though the force is applied per part, because
+/// whether a part is in the wake depends on what its neighbours are doing.
 ///
-/// Lift, angle of attack and the aerodynamic torque that makes a rocket weathervane are all
-/// absent for the same reason: they need a model of where the force acts, not just how big
-/// it is. Drag here acts at the centre of mass, so it slows a vessel without ever turning it.
+/// # What this still does not model
+///
+/// Lift, angle of attack, and the aerodynamic torque that makes a real rocket weathervane.
+/// All three need a model of *where* the force acts, not just how big it is. Drag here acts
+/// at each part's own centre, which does produce some turning moment on an asymmetric
+/// vessel, but nothing that deserves to be called an aerodynamics model.
 ///
 /// # Ordering
 ///
@@ -108,21 +115,60 @@ pub struct DragSurface {
 pub fn apply_drag(
     body: Res<CelestialBody>,
     atmosphere: Res<Atmosphere>,
-    mut parts: Query<(&SimPosition, &SimVelocity, &DragSurface, &mut PendingForces)>,
+    parts: Query<(Entity, &VesselId, &SimPosition, &SimVelocity, &DragSurface)>,
+    mut forces: Query<&mut PendingForces>,
+    mut by_vessel: Local<HashMap<Entity, Vec<Entity>>>,
+    mut lookup: Local<HashMap<Entity, (DVec3, DVec3, f64, f64)>>,
 ) {
-    for (position, velocity, surface, mut forces) in &mut parts {
-        let speed = velocity.0.length();
-        if speed <= 0.0 {
-            continue;
-        }
+    by_vessel.clear();
+    lookup.clear();
 
-        let density = atmosphere.density_at(body.altitude_of(position.0));
-        if density <= 0.0 {
-            continue;
-        }
+    for (part, vessel, position, velocity, surface) in &parts {
+        by_vessel.entry(vessel.0).or_default().push(part);
+        lookup.insert(part, (position.0, velocity.0, surface.radius_m, surface.cd));
+    }
 
-        let magnitude = 0.5 * density * speed * speed * surface.cd * surface.area_m2;
-        forces.add_force(-velocity.0 / speed * magnitude);
+    for members in by_vessel.values() {
+        // The flow direction is the vessel's motion, not each part's: parts of one rigid
+        // stack differ only by rotation, and using per-part velocity would let a slowly
+        // tumbling vessel disagree with itself about which end is facing the wind.
+        let mean_velocity: DVec3 = members
+            .iter()
+            .filter_map(|part| lookup.get(part))
+            .map(|(_, velocity, _, _)| *velocity)
+            .sum::<DVec3>()
+            / members.len() as f64;
+
+        let frontals: Vec<occlusion::Frontal> = members
+            .iter()
+            .filter_map(|part| lookup.get(part))
+            .map(|(position, _, radius, _)| occlusion::Frontal {
+                position: *position,
+                radius_m: *radius,
+            })
+            .collect();
+
+        let areas = occlusion::exposed_areas(&frontals, mean_velocity);
+
+        for (index, part) in members.iter().enumerate() {
+            let Some((position, velocity, _, cd)) = lookup.get(part) else {
+                continue;
+            };
+            let speed = velocity.length();
+            if speed <= 0.0 || areas[index] <= 0.0 {
+                continue;
+            }
+
+            let density = atmosphere.density_at(body.altitude_of(*position));
+            if density <= 0.0 {
+                continue;
+            }
+
+            let magnitude = 0.5 * density * speed * speed * cd * areas[index];
+            if let Ok(mut pending) = forces.get_mut(*part) {
+                pending.add_force(-*velocity / speed * magnitude);
+            }
+        }
     }
 }
 

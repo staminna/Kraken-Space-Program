@@ -46,15 +46,24 @@ pub struct PartDefinition {
     /// a blunt cylinder, which is what most parts are and what every part looks like until
     /// somebody models a nose cone.
     pub drag_coefficient: f64,
+    /// Radius of the disc the part presents to the airflow, metres.
+    ///
+    /// Separate from the shape radius because an open structure blocks far less air than it
+    /// occupies: a landing strut assembly is 1.9 m across and needs to be, so the vessel has
+    /// a wide base of support, but it is four thin legs and a hub — treating it as a solid
+    /// 1.9 m disc turns it into a parachute. Lua declares `drag_radius`; the default is the
+    /// shape radius, which is right for anything solid.
+    pub drag_radius_m: f64,
 }
 
 /// Default drag coefficient for a part that does not declare one.
 ///
-/// 0.3 is a smooth cylinder in axial flow. It is deliberately not the 0.8–1.2 of a flat
-/// disc: with no occlusion model every part in a stack presents its full frontal area, so a
-/// per-part coefficient tuned as if each were alone in the airstream would give a five-part
-/// rocket about five times too much drag.
-pub const DEFAULT_DRAG_COEFFICIENT: f64 = 0.3;
+/// A blunt-ended cylinder in axial flow, which is what every stock part is — none of them
+/// has a nose cone yet. This used to be 0.3, not because anything was that streamlined, but
+/// to compensate for every part in a stack presenting its full frontal area at once. With
+/// shielding modelled properly (`celestial::occlusion`) the coefficient can go back to
+/// meaning what it says.
+pub const DEFAULT_DRAG_COEFFICIENT: f64 = 0.8;
 
 impl PartDefinition {
     /// Finds an attach node by name (`"top"`, `"bottom"`, ...).

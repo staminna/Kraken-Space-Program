@@ -12,6 +12,7 @@ use crate::physics::PhysicsSchedule;
 
 pub mod atmosphere;
 pub mod body;
+pub mod occlusion;
 
 pub struct CelestialPlugin;
 
