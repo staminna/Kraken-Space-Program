@@ -11,7 +11,7 @@ use crate::celestial::body::CelestialBody;
 use crate::part_modules::resource_container::ResourceContainer;
 use crate::physics::forces::PendingForces;
 use crate::rendering::render_sync::{SimPosition, SimRotation};
-use crate::vessel::components::{ControlState, FuelGroup, VesselId};
+use crate::vessel::components::{ControlState, Destroyed, FuelGroup, VesselId};
 
 /// Standard gravity, m/s². The constant in the rocket equation — not the local
 /// gravitational acceleration, which is why it does not change when you leave Earth.
@@ -50,7 +50,7 @@ pub struct Engine {
 /// through attach nodes, priority by stage — are Phase 2; this is the simplest thing that
 /// makes a two-stage rocket behave correctly.
 pub fn apply_engine_thrust(
-    vessels: Query<&ControlState>,
+    vessels: Query<(&ControlState, Has<Destroyed>)>,
     body: Res<CelestialBody>,
     atmosphere: Res<Atmosphere>,
     mut engines: Query<(
@@ -64,10 +64,19 @@ pub fn apply_engine_thrust(
     mut tanks: Query<(&VesselId, &FuelGroup, &mut ResourceContainer)>,
 ) {
     for (mut engine, vessel_id, fuel_group, position, rotation, mut forces) in &mut engines {
-        let Ok(control) = vessels.get(vessel_id.0) else {
+        // A wreck does not thrust. `vessel::damage` zeroes the throttle when a vessel is
+        // destroyed, but relying on that alone makes "does the rubble fly away across the
+        // pad" depend on nobody ever writing to `ControlState` afterwards — which is exactly
+        // what a scripted pilot or a replayed input stream does. The invariant belongs here,
+        // where the thrust is produced.
+        let Ok((control, destroyed)) = vessels.get(vessel_id.0) else {
             engine.current_thrust_n = 0.0;
             continue;
         };
+        if destroyed {
+            engine.current_thrust_n = 0.0;
+            continue;
+        }
 
         let throttle = f64::from(control.throttle.clamp(0.0, 1.0));
         if throttle <= 0.0 {

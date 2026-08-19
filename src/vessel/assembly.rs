@@ -64,7 +64,8 @@ const ANGULAR_DAMPING: f32 = 0.5;
 /// design.md Phase 1: "Load a hardcoded vessel from a part tree definition". The *parts*
 /// come from Lua; only the arrangement is hardcoded. The editor that replaces this list is
 /// Phase 4.
-const TEST_STACK: [&str; 5] = [
+const TEST_STACK: [&str; 6] = [
+    "kraken.gear.lt2",
     "kraken.engine.reliant",
     "kraken.fueltank.small.03",
     "kraken.decoupler.small",

@@ -24,6 +24,8 @@
 //! the next bug of this shape gets noticed on the run that introduces it.
 
 use bevy::platform::collections::HashSet;
+
+pub mod test_pilot;
 use bevy::prelude::*;
 
 use crate::celestial::atmosphere::Atmosphere;
@@ -62,6 +64,18 @@ pub struct DiagnosticsPlugin;
 
 impl Plugin for DiagnosticsPlugin {
     fn build(&self, app: &mut App) {
+        if let Some(profile) = test_pilot::Profile::from_env() {
+            info!("scripted pilot enabled: {profile:?}");
+            app.insert_resource(profile)
+                .init_resource::<test_pilot::PilotState>()
+                // In `Clear`, so it has written the controls before any force producer
+                // reads them — the same point in the tick a player's input reaches.
+                .add_systems(
+                    FixedUpdate,
+                    test_pilot::fly.in_set(crate::physics::PhysicsSchedule::Clear),
+                );
+        }
+
         app.init_resource::<TraceConfig>()
             .add_systems(Startup, announce_trace)
             // After Writeback so both see this tick's settled state, and after the physics
