@@ -132,6 +132,15 @@ Things that can't move forward until a call is made. If you're unblocking one of
 
 Decisions made, with dates and reasoning. If you're wondering why something is the way it is, check here before asking.
 
+### [2026-08-19] Attitude authority comes from parts, not from a constant
+**Decision:** `ReactionWheel` is a part module. A vessel's control torque is the sum of its wheels; each applies its own share; a vessel with none cannot steer.
+
+**Why:** the constant it replaced gave every vessel identical authority regardless of what it was built from — a probe and a fuelled launch stack turned at the same rate — and it was sized by hand against the one test rocket, so it had to be retuned by a factor of ten the first time that rocket changed. It would have needed retuning again for every rocket after that.
+
+**The consequence is deliberate:** stage away the probe core and the spent booster stops responding to input. That is correct, and it is the kind of thing that only becomes true once authority is a property of the hardware.
+
+**Still a simplification:** wheels never saturate, need no electricity and have no gimbal to fall back on. Logged as CHECKLIST #24 and #25.
+
 ### [2026-08-19] Per-tick tracing and a flight watchdog are permanent, not ad hoc
 **Decision:** `diagnostics/` ships an always-on watchdog plus `KRAKEN_TRACE=<seconds>|all` for one log line per physics tick.
 

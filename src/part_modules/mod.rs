@@ -15,6 +15,7 @@ use crate::physics::PhysicsSchedule;
 
 pub mod decoupler;
 pub mod engine;
+pub mod reaction_wheel;
 pub mod resource_container;
 
 pub struct PartModulesPlugin;

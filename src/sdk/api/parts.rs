@@ -28,7 +28,7 @@ use mlua::{Lua, Table};
 
 use crate::sdk::part_def::{
     AttachNode, DEFAULT_DRAG_COEFFICIENT, DecouplerDef, EngineDef, PartDefinition, PartModuleDef,
-    ResourceContainerDef,
+    ReactionWheelDef, ResourceContainerDef,
 };
 
 /// Field used to tag a module table with its type, so `part {}` can dispatch on it.
@@ -63,6 +63,7 @@ pub fn install(lua: &Lua, env: &Table, sink: PartSink, asset_dir: String) -> mlu
         module_constructor(lua, "resource_container")?,
     )?;
     env.set("decoupler", module_constructor(lua, "decoupler")?)?;
+    env.set("reaction_wheel", module_constructor(lua, "reaction_wheel")?)?;
 
     env.set(
         "part",
@@ -225,6 +226,9 @@ fn parse_modules(table: &Table, part_id: &str) -> mlua::Result<Vec<PartModuleDef
                     max_kg: max,
                 })
             }
+            "reaction_wheel" => PartModuleDef::ReactionWheel(ReactionWheelDef {
+                torque_nm: required::<f64>(&module, "torque", &context)? * N_PER_KN,
+            }),
             "decoupler" => PartModuleDef::Decoupler(DecouplerDef {
                 stage: module.get::<Option<u32>>("stage")?.unwrap_or(0),
                 node: required::<String>(&module, "node", &context)?,

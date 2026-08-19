@@ -96,6 +96,7 @@ pub struct AttachNode {
 /// type means adding a variant here, a component in `part_modules/`, and a system.
 #[derive(Debug, Clone)]
 pub enum PartModuleDef {
+    ReactionWheel(ReactionWheelDef),
     Engine(EngineDef),
     ResourceContainer(ResourceContainerDef),
     Decoupler(DecouplerDef),
@@ -130,4 +131,11 @@ pub struct DecouplerDef {
     pub node: String,
     /// Separation impulse in **newtons** (Lua declares kN).
     pub ejection_force_n: f64,
+}
+
+/// `reaction_wheel { torque = 3.0 }` — attitude authority, in kN·m in Lua.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReactionWheelDef {
+    /// Torque at full deflection, newton-metres.
+    pub torque_nm: f64,
 }

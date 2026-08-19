@@ -11,9 +11,11 @@
 //! input reaches the simulation exactly once.
 
 use bevy::math::DVec3;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{ReadMassProperties, Velocity};
 
+use crate::part_modules::reaction_wheel::ReactionWheel;
 use crate::physics::forces::PendingForces;
 use crate::rendering::render_sync::{SimPosition, SimRotation};
 use crate::vessel::components::{ActiveVessel, ControlState, RootPart, VesselId};
@@ -24,18 +26,6 @@ use crate::vessel::components::{ActiveVessel, ControlState, RootPart, VesselId};
 /// full is roughly a real gimballed engine's spool rate and, more importantly, is slow
 /// enough to be flyable with a keyboard.
 const THROTTLE_RATE_PER_SEC: f32 = 0.5;
-
-/// Control authority, newton-metres at full deflection.
-///
-/// A stand-in for real reaction wheels and engine gimbals — both are part modules that do
-/// not exist yet. It will be deleted outright the moment gimbals are a part module rather
-/// than a global constant.
-///
-/// Measured, not guessed: one second of full deflection puts the test stack at roughly
-/// 0.9 rad/s (about 50°/s), which flips it retrograde in a few seconds of held input. The
-/// previous value of 30 kN·m reached 11 rad/s in the same second and then tore the joint
-/// solver apart — the stack reached 847 rad/s before the parts scattered.
-const ATTITUDE_TORQUE_NM: f64 = 3_000.0;
 
 /// How long SAS takes to null a rotation, in seconds.
 ///
@@ -135,45 +125,100 @@ fn axis(keys: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f3
 pub fn apply_attitude_control(
     vessels: Query<&ControlState>,
     parts: Query<(&VesselId, &SimPosition, &ReadMassProperties)>,
-    mut roots: Query<(&VesselId, &SimRotation, &Velocity, &mut PendingForces), With<RootPart>>,
+    rates: Query<(&VesselId, &Velocity), With<RootPart>>,
+    mut wheels: Query<(&ReactionWheel, &VesselId, &SimRotation, &mut PendingForces)>,
 ) {
-    for (vessel_id, rotation, velocity, mut forces) in &mut roots {
+    // What each vessel wants done, worked out once, then divided among its wheels.
+    let mut demand: HashMap<Entity, AttitudeDemand> = HashMap::new();
+
+    for (_, vessel_id, _, _) in &wheels {
+        if demand.contains_key(&vessel_id.0) {
+            continue;
+        }
         let Ok(control) = vessels.get(vessel_id.0) else {
             continue;
         };
 
-        // Control axes are vessel-local: pitch about its right axis, yaw about its up
-        // axis, roll about the axis it points along. Using world axes instead would make
-        // the controls swap meaning as soon as the rocket tipped over.
+        // Total authority is whatever is bolted to this vessel. A stack that has lost its
+        // probe core to staging has none, and stops responding — which is the point.
+        let available_nm: f64 = wheels
+            .iter()
+            .filter(|(_, owner, _, _)| owner.0 == vessel_id.0)
+            .map(|(wheel, _, _, _)| wheel.torque_nm)
+            .sum();
+        if available_nm <= 0.0 {
+            continue;
+        }
+
+        // Control axes are vessel-local: pitch about its right axis, yaw about its up axis,
+        // roll about the axis it points along. Using world axes instead would make the
+        // controls swap meaning as soon as the rocket tipped over.
         let local = DVec3::new(
             f64::from(control.pitch),
             f64::from(control.roll),
             f64::from(control.yaw),
         );
 
-        if local != DVec3::ZERO {
+        let wanted = if local != DVec3::ZERO {
             // Manual input wins outright. Blending SAS in here would fight the player on
             // every deliberate turn and make the rocket feel like it is resisting them.
-            forces.add_torque(rotation.0 * local * ATTITUDE_TORQUE_NM);
+            Wanted::Local(local)
+        } else if !control.sas {
             continue;
-        }
+        } else {
+            let rate = rates
+                .iter()
+                .find(|(owner, _)| owner.0 == vessel_id.0)
+                .map(|(_, velocity)| velocity.angvel.as_dvec3())
+                .unwrap_or(DVec3::ZERO);
+            if rate.length() < SAS_DEADBAND_RAD_S {
+                continue;
+            }
+            // `τ = I·ω/T` — the torque that removes this rotation over SAS_SETTLE_SECS.
+            let correction = -rate * (vessel_inertia(vessel_id.0, &parts) / SAS_SETTLE_SECS);
+            Wanted::World(correction.clamp_length_max(available_nm))
+        };
 
-        if !control.sas {
-            continue;
-        }
-
-        let rate = velocity.angvel.as_dvec3();
-        if rate.length() < SAS_DEADBAND_RAD_S {
-            continue;
-        }
-
-        // `τ = I·ω/T` — the torque that removes this rotation over SAS_SETTLE_SECS.
-        let correction = -rate * (vessel_inertia(vessel_id.0, &parts) / SAS_SETTLE_SECS);
-
-        // Capped at the vessel's authority so a violent tumble cannot ask for more torque
-        // than reaction wheels could ever produce.
-        forces.add_torque(correction.clamp_length_max(ATTITUDE_TORQUE_NM));
+        demand.insert(
+            vessel_id.0,
+            AttitudeDemand {
+                wanted,
+                available_nm,
+            },
+        );
     }
+
+    for (wheel, vessel_id, rotation, mut forces) in &mut wheels {
+        let Some(demand) = demand.get(&vessel_id.0) else {
+            continue;
+        };
+
+        // Each wheel does its share of the work, in proportion to how much of the vessel's
+        // authority it is. Applying the total at one part would work too — the joints carry
+        // it either way — but this puts the torque where the hardware is, which is what
+        // makes a vessel with wheels at one end behave differently from one with them in
+        // the middle once flexible joints exist.
+        let share = wheel.torque_nm / demand.available_nm;
+
+        match demand.wanted {
+            Wanted::Local(axes) => forces.add_torque(rotation.0 * axes * wheel.torque_nm),
+            Wanted::World(torque) => forces.add_torque(torque * share),
+        }
+    }
+}
+
+/// What a vessel's wheels are being asked to do this tick.
+struct AttitudeDemand {
+    wanted: Wanted,
+    /// Total torque the vessel's wheels can produce, newton-metres.
+    available_nm: f64,
+}
+
+enum Wanted {
+    /// Player deflection, in vessel-local axes, as a fraction of each wheel's own torque.
+    Local(DVec3),
+    /// An absolute world-space torque to be divided among the wheels — the SAS correction.
+    World(DVec3),
 }
 
 /// Approximate moment of inertia of a whole vessel about its centre of mass, kg·m².

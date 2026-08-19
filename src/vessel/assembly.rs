@@ -12,6 +12,7 @@ use bevy_rapier3d::prelude::*;
 use crate::celestial::atmosphere::DragSurface;
 use crate::part_modules::decoupler::Decoupler;
 use crate::part_modules::engine::Engine;
+use crate::part_modules::reaction_wheel::ReactionWheel;
 use crate::part_modules::resource_container::{ResourceContainer, ResourceSlot};
 use crate::physics::forces::PendingForces;
 use crate::physics::joints::{self, JointStrength};
@@ -64,13 +65,14 @@ const ANGULAR_DAMPING: f32 = 0.5;
 /// design.md Phase 1: "Load a hardcoded vessel from a part tree definition". The *parts*
 /// come from Lua; only the arrangement is hardcoded. The editor that replaces this list is
 /// Phase 4.
-const TEST_STACK: [&str; 6] = [
+const TEST_STACK: [&str; 7] = [
     "kraken.gear.lt2",
     "kraken.engine.reliant",
     "kraken.fueltank.small.03",
     "kraken.decoupler.small",
     "kraken.engine.spark",
     "kraken.fueltank.small.03",
+    "kraken.pod.probe",
 ];
 
 /// Builds the test rocket and makes it the active vessel.
@@ -331,6 +333,11 @@ fn insert_modules(commands: &mut Commands, part: Entity, definition: &PartDefini
                     resource: slot.resource.clone(),
                     amount_kg: slot.amount_kg,
                     max_kg: slot.max_kg,
+                });
+            }
+            PartModuleDef::ReactionWheel(wheel) => {
+                commands.entity(part).insert(ReactionWheel {
+                    torque_nm: wheel.torque_nm,
                 });
             }
             PartModuleDef::Decoupler(decoupler) => {
