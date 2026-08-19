@@ -2,7 +2,9 @@ part {
   id = "kraken.engine.spark",
   author = "Seraphina",
 
-  geometry = "assets/parts/engine_spark.glb",
+  -- Paths are relative to this file's own directory. No mesh authored yet; the loader
+  -- warns and substitutes a primitive.
+  geometry = "engine_spark.glb",
   
   display_name = "48-7S \"Spark\" RP-1 engine",
   manufacturer = "Seraphina Aerospace Industries",
@@ -10,8 +12,8 @@ part {
   categories = {"engine", "RP-1", "0.625m"},
 
   
-  mass = 0.13,  -- tonnes, dry
-  
+  mass = 0.13,  -- tonnes, dry (the loader converts to kg)
+
   attach_nodes = {
 
     top = {
@@ -34,7 +36,10 @@ part {
       thrust      = 20,    -- kN, vacuum
       isp_vac     = 320,   -- s
       isp_sl      = 265,   -- s
-      propellants = { RP1 = 0.3, Oxidizer = 0.7 },
+      -- Mass fractions, must sum to 1. The oxidiser is named LOX to match what the
+      -- tanks actually carry — this said "Oxidizer" before, which no tank stores, so
+      -- the engine would have found no oxidiser and produced no thrust.
+      propellants = { RP1 = 0.3, LOX = 0.7 },
     },
   },
 }

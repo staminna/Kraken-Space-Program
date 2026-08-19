@@ -88,24 +88,42 @@ The open-source mod ecosystem isn't a reference — it's a foundation.
 
 ## Current status
 
-🚧 **Early development — Phase 0 mostly complete.**
+🚧 **Early development — Phase 0 complete, Phase 1 in progress.**
 
-The foundation is real. The architecture is established. A ball falls under gravity and bounces. It's not much to look at yet, but everything underneath it is built to last.
+**A rocket flies, and lands.** You can throttle it up, steer it, stage it, and watch the spent booster fall
+away behind you. It is five placeholder cylinders and a flat grey plane, but the parts are defined
+in Lua, the physics runs at an honest fixed 50 Hz, and the origin shifts under you at 10 km without
+so much as a flicker.
 
-**Phase 0 — Foundation** *(mostly done)*
+Gravity falls off with altitude, the air thins out above you, and joints break when you overload
+them. A ballistic re-entry from 11 km peaks at 291 m/s and *slows down* on the way in.
+
+**Controls:** `Shift`/`Ctrl` throttle · `Z`/`X` full/cut · `WASD` steer · `Q`/`E` roll · `T` SAS · `Space` stage · right-drag orbit · scroll zoom
+
+On a Mac trackpad, "right-drag" is usually Control-click-drag — and `Control` is throttle-down, so
+orbiting that way quietly closes the throttle. Use a two-finger click-drag or a mouse.
+
+**Phase 0 — Foundation** *(done)*
 - [x] Bevy project skeleton — window opens, nothing crashes
 - [x] Coordinate system types — `SimPosition` (f64), `WorldOrigin`, `LocalOrigin`, `render_sync.rs` as the single f64→f32 conversion point
-- [x] Rapier physics integration — rigid bodies, fixed 50 Hz timestep, gravity
+- [x] Rapier physics integration — rigid bodies, genuinely fixed 50 Hz timestep, gravity
+- [x] Physics interpolation — rendering interpolates between ticks, smooth at any refresh rate
+- [x] wgpu pipeline confirmed — Metal on Apple Silicon, Vulkan on Linux, no platform-specific code
 - [x] Module directory structure matching the full architecture in `DESIGN.md`
-- [x] CI pipeline — `cargo fmt`, `cargo clippy`, `cargo test` on every push
-- [ ] Physics interpolation — fixed timestep running, render interpolation between ticks pending
-- [ ] wgpu pipeline smoke test
+- [x] CI pipeline — `fmt`, `clippy -D warnings`, `test`, on Linux **and** macOS
 
-**Phase 1 — A Rocket Goes Up** *(not started)*
+**Phase 1 — A Rocket Goes Up** *(in progress)*
+- [x] Parts loaded from Lua definitions, assembled into a jointed vessel
+- [x] `PendingForces`, engine thrust, propellant consumption from the rocket equation
+- [x] Staging — decouple, split into two vessels, fly on
+- [x] Krakensbane origin shifting
+- [x] Camera tracking and a placeholder HUD
+- [ ] Aerodynamic drag
+- [ ] Point-mass gravity
+- [ ] Crash detection
+- [ ] Structural failure (joints that break under load)
 
-Part entities, joints, thrust, drag, staging, Krakensbane origin shifting, camera tracking, crash detection. A hardcoded multi-stage rocket launches, reaches space, and stages. No Lua yet.
-
-The full roadmap lives in [`DESIGN.md`](DESIGN.md). Current tasks and decisions live in [`EXECUTION.md`](EXECUTION.md).
+The full roadmap lives in [`DESIGN.md`](DESIGN.md). Current tasks and decisions live in [`EXECUTION.md`](EXECUTION.md). Corners cut, and why, live in [`CHECKLIST.md`](CHECKLIST.md).
 
 ---
 

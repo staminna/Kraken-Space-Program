@@ -66,7 +66,23 @@ There are four coordinate spaces in this engine. They are not interchangeable.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**The conversion rule is absolute: only `render_sync.rs` crosses the f64→f32 boundary. No other file is allowed to do this. Ever.**
+**The conversion rule: only `render_sync.rs` converts a *simulation* position to a *render* position. No other file is allowed to do this. Ever.**
+
+There is exactly one qualification, and it is not optional: **Rapier is f32 throughout.** There
+is no f64 build of it and there is not going to be one, so `SimPosition` cannot be the value
+Rapier integrates — it has to be a value *derived* from what Rapier integrates:
+
+```
+SIMULATION WORLD (f64)  =  WorldOrigin (f64)  +  Rapier's local transform (f32)
+```
+
+Rapier only ever sees a **local physics frame** that Krakensbane keeps within ~10 km of zero,
+where f32 has roughly millimetre precision — ample for resolving contacts. `physics/readback.rs`
+lifts the result back to f64 after every tick, and `physics/krakensbane.rs` moves the frame.
+
+So the rule in practice is: **f32 positions are legal inside `physics/` (Rapier's frame) and
+`rendering/` (the GPU's frame). Anything crossing a module boundary is f64.** If you are writing
+`as f32` on a position anywhere else, you are in the wrong place.
 
 The cast is safe because the subtraction happens first:
 ```rust
@@ -604,32 +620,32 @@ Lessons from KSP1's source code, documented so they don't get repeated.
 
 ## Development Phases
 
-### Phase 0 — Foundation (current)
+### Phase 0 — Foundation (complete)
 - [ ] Document KSP1 source behavior (ongoing)
 - [x] Set up Bevy project skeleton
 - [x] Basic Rapier integration, one rigid body falls under gravity
 - [x] Basic camera
-- [ ] wgpu rendering pipeline confirmed working
+- [x] wgpu rendering pipeline confirmed working (Metal on Apple Silicon, no platform-specific code)
 - [x] CI set up (fmt, clippy, tests must pass to merge)
 - [x] Coordinate system types established (`SimPosition`, `WorldOrigin`, `LocalOrigin`)
 - [x] `render_sync.rs` stub exists and is the only f64→f32 conversion point
 
 **Exit criteria:** A sphere falls under gravity and renders. CI is green.
 
-### Phase 1 — A Rocket Goes Up
-- [ ] Load a hardcoded vessel from a part tree definition
-- [ ] Part entity assembly system (definition → ECS components)
-- [ ] Part joint system (vessel as connected rigid bodies in Rapier)
-- [ ] `PendingForces` component + Rapier application system
-- [ ] Thrust force application
-- [ ] Basic atmosphere drag (flat model, no curves yet)
-- [ ] Gravity (point mass, single body)
-- [ ] Staging (decouple a joint, split into two vessels)
-- [ ] Krakensbane origin shifting
-- [ ] Camera follows active vessel
-- [ ] Basic placeholder UI (altitude, velocity, throttle)
-- [ ] Crash detection (impact velocity → part destruction events)
-- [ ] Basic resource flow system (parts consume and generate resources per crossfeed rules)
+### Phase 1 — A Rocket Goes Up (in progress)
+- [x] Load a vessel from part definitions — from Lua, not a hardcoded Rust struct
+- [x] Part entity assembly system (definition → ECS components)
+- [x] Part joint system (vessel as connected rigid bodies in Rapier)
+- [x] `PendingForces` component + Rapier application system
+- [x] Thrust force application
+- [x] Basic atmosphere drag (flat model, no curves yet)
+- [x] Gravity (point mass, single body)
+- [x] Staging (decouple a joint, split into two vessels)
+- [x] Krakensbane origin shifting
+- [x] Camera follows active vessel
+- [x] Basic placeholder UI (altitude, velocity, throttle)
+- [x] Crash detection (impact velocity → vessel destruction; parts survive as debris)
+- [x] Basic resource flow system — simplified: per-fuel-group, not per-node crossfeed
 
 **Exit criteria:** A hardcoded multi-stage rocket can launch, reach space, and stage. No f32 precision artifacts visible.
 

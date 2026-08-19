@@ -13,13 +13,26 @@ bevy = { version = "0.18.1", default-features = false, features = [
     "bevy_scene",
     "bevy_winit",
     "bevy_window",
-    "wayland",           # for your KDE Wayland setup
+    "bevy_state",        # GameState (flight / editor / error) — DESIGN.md error handling
+    "multi_threaded",    # parallel ECS. Without this Bevy runs single-threaded.
+    "bevy_log",          # LogPlugin: makes info!/warn!/error! and RUST_LOG filtering work
+    "bevy_gltf",         # .glb part meshes (src/assets/parts/**/*.glb)
+    "bevy_ui",           # HUD layout
+    "bevy_ui_render",    # HUD *drawing* — bevy_ui alone is layout only in 0.18
+    "bevy_text",         # HUD text
+    "default_font",      # built-in font, so the HUD needs no shipped .ttf
+    "bevy_gizmos",       # debug vectors (thrust, velocity, attach nodes)
+    "bevy_gizmos_render",
+    "wayland",           # Linux/KDE contributors
+    "x11",               # Linux/X11 contributors
+    "png",               # stock part .glb files embed PNG textures
     "ktx2",              # compressed textures
     "tonemapping_luts",  # fixes bright/pink PBR materials
     "zstd_rust",         # safe Rust implementation for zstd (no "zstd" feature)
 ] }
 
 bevy_rapier3d = { version = "0.33.0", features = ["default"] }
+mlua = { version = "0.12.0", features = ["lua54", "vendored"] }
 
 [profile.dev]
 opt-level = 1
