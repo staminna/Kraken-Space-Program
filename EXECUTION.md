@@ -43,6 +43,26 @@ cargo fmt --check
 cargo clippy -- -D warnings
 ```
 
+### Diagnosing flight
+
+Two of Phase 1's worst bugs were invisible at half-second logging resolution and settled
+before anyone could see them. Use these before believing a physics change works:
+
+```bash
+# One log line per physics tick, for the first N seconds — or "all" for the whole session.
+KRAKEN_TRACE=2 cargo run
+
+# Fly a scripted profile so a landing is reproducible without a human at the keyboard.
+KRAKEN_PILOT=hop cargo run          # up 60 m, back down, soft landing
+KRAKEN_PILOT=hop KRAKEN_PILOT_DRIFT=1 cargo run   # ...with lateral drift to cope with
+KRAKEN_PILOT=ballistic cargo run    # burn to 6 km and let it fall: drag and impact damage
+KRAKEN_PILOT=idle cargo run         # sit still and settle
+```
+
+The **watchdog** in `diagnostics/` needs no flag and stays on in release. If it says
+something, believe it — every check in it exists because something real got past review
+without it.
+
 CI runs `fmt`, `clippy`, and `test` on every push. A red CI blocks merging. No exceptions.
 
 ---

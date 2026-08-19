@@ -95,13 +95,21 @@ away behind you. It is five placeholder cylinders and a flat grey plane, but the
 in Lua, the physics runs at an honest fixed 50 Hz, and the origin shifts under you at 10 km without
 so much as a flicker.
 
-Gravity falls off with altitude, the air thins out above you, and joints break when you overload
-them. A ballistic re-entry from 11 km peaks at 291 m/s and *slows down* on the way in.
+Gravity falls off with altitude, the air thins out above you, parts shield each other from the
+airstream, and joints break when you overload them. A ballistic re-entry from 12 km peaks at
+around 300 m/s and *slows down* on the way in. It lands on its legs.
 
 **Controls:** `Shift`/`Ctrl` throttle · `Z`/`X` full/cut · `WASD` steer · `Q`/`E` roll · `T` SAS · `Space` stage · right-drag orbit · scroll zoom
 
 On a Mac trackpad, "right-drag" is usually Control-click-drag — and `Control` is throttle-down, so
 orbiting that way quietly closes the throttle. Use a two-finger click-drag or a mouse.
+
+SAS is on from the pad. It kills rotation rather than holding a heading: point the rocket where you
+want it and let go, and it stays there.
+
+**Diagnosing a change:** `KRAKEN_TRACE=2` logs one line per physics tick, and
+`KRAKEN_PILOT=hop|ballistic|idle` flies a scripted profile so a landing is reproducible without a
+human at the keyboard. See EXECUTION.md.
 
 **Phase 0 — Foundation** *(done)*
 - [x] Bevy project skeleton — window opens, nothing crashes
