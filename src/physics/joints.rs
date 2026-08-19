@@ -113,6 +113,24 @@ fn load_from_impulses(impulses: [f32; 3], dt_secs: f64) -> JointLoad {
     }
 }
 
+/// The most loaded joint in the simulation this tick, as a fraction of its own limit.
+///
+/// Published so that diagnostics can report structural margin without reaching into Rapier —
+/// `physics/` is the only module allowed to do that, so it does the reading once and hands
+/// out the number. 1.0 means "at the breaking point".
+#[derive(Resource, Debug, Default, Clone, Copy)]
+pub struct PeakJointLoad {
+    pub fraction_of_limit: f64,
+}
+
+/// Load fraction at which a joint is close enough to failing to be worth saying so.
+///
+/// Above the ~0.49 a healthy stack peaks at while settling onto the pad, and far enough
+/// below 1.0 to be a warning rather than an obituary. The bug this exists to catch — parts'
+/// colliders fighting their own joints — sat at *nine times* the limit, so the exact
+/// threshold matters much less than having one at all.
+const JOINT_LOAD_WARN_FRACTION: f64 = 0.7;
+
 /// Consecutive ticks a joint must be over its limit before it breaks.
 ///
 /// # Why a single overloaded tick is not a failure
@@ -127,6 +145,13 @@ fn load_from_impulses(impulses: [f32; 3], dt_secs: f64) -> JointLoad {
 /// a high-speed turn — lasts as long as its cause. Three ticks is 60 ms: long enough that no
 /// contact transient survives it, short enough that a genuine overload still fails promptly.
 const TICKS_OVER_LIMIT_BEFORE_FAILURE: u32 = 3;
+
+/// Per-joint overload counters, plus the warning cooldown. One `Local` rather than three.
+#[derive(Default)]
+pub struct FailureDetectorState {
+    ticks_over_limit: HashMap<Entity, u32>,
+    last_warned_secs: f64,
+}
 
 /// Breaks joints whose load exceeded the limits from their Lua definition.
 ///
@@ -146,8 +171,16 @@ pub fn detect_joint_failures(
     mut failures: MessageWriter<JointFailure>,
     // Rebuilt from the live joints every tick, so a joint that goes away — through staging,
     // through a failure, through the vessel being deleted — takes its counter with it.
-    mut ticks_over_limit: Local<HashMap<Entity, u32>>,
+    mut state: Local<FailureDetectorState>,
+    mut peak_load: ResMut<PeakJointLoad>,
+    time: Res<Time<Fixed>>,
 ) {
+    let FailureDetectorState {
+        ticks_over_limit,
+        last_warned_secs,
+    } = &mut *state;
+    peak_load.fraction_of_limit = 0.0;
+
     let Ok(context) = context.single() else {
         return;
     };
@@ -170,6 +203,16 @@ pub fn detect_joint_failures(
         // A limit of zero means "not authored", not "breaks under its own weight". Every
         // stock part declares both, but a mod that forgets one should get an unbreakable
         // joint rather than a rocket that disassembles itself on the pad.
+        // Fraction of whichever limit this joint is closest to breaking.
+        let mut fraction: f64 = 0.0;
+        if strength.tensile_n > 0.0 {
+            fraction = fraction.max(load.axial_n / strength.tensile_n);
+        }
+        if strength.shear_n > 0.0 {
+            fraction = fraction.max(load.shear_n / strength.shear_n);
+        }
+        peak_load.fraction_of_limit = peak_load.fraction_of_limit.max(fraction);
+
         let over_tension = strength.tensile_n > 0.0 && load.axial_n > strength.tensile_n;
         let over_shear = strength.shear_n > 0.0 && load.shear_n > strength.shear_n;
 
@@ -199,6 +242,17 @@ pub fn detect_joint_failures(
     }
 
     ticks_over_limit.retain(|joint, _| still_present.contains(joint));
+
+    // Structural margin is invisible until it is gone, so say something while there is still
+    // margin left to lose. Rate-limited: the condition lasts as long as its cause.
+    let now = time.elapsed_secs_f64();
+    if peak_load.fraction_of_limit > JOINT_LOAD_WARN_FRACTION && now - *last_warned_secs > 2.0 {
+        *last_warned_secs = now;
+        warn!(
+            "a joint is carrying {:.0}% of its breaking load",
+            peak_load.fraction_of_limit * 100.0
+        );
+    }
 }
 
 #[cfg(test)]

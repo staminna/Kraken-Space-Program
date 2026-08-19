@@ -132,6 +132,15 @@ Things that can't move forward until a call is made. If you're unblocking one of
 
 Decisions made, with dates and reasoning. If you're wondering why something is the way it is, check here before asking.
 
+### [2026-08-19] Per-tick tracing and a flight watchdog are permanent, not ad hoc
+**Decision:** `diagnostics/` ships an always-on watchdog plus `KRAKEN_TRACE=<seconds>|all` for one log line per physics tick.
+
+**Why:** two of the three worst bugs in Phase 1 were invisible at the resolution anyone was looking at. A stationary rocket on the pad bounced at 9.5 m/s and loaded its joints to nine times breaking strength for a third of a second — every 0.5 s log line showed a vessel sitting perfectly still. SAS spun a motionless vessel to a *constant* 0.68 rad/s, which reads as "not changing" in any summary. Both were found by hand-writing a throwaway per-tick logger, twice, after already suspecting something.
+
+The watchdog is the half that matters: it fires without anyone suspecting anything first. Each check exists because something real got past review without it — non-finite state, terrain tunnelling, SAS failing to converge, absurd velocity, and (in `joints.rs`) a joint above 70% of its breaking load. They are ordinary comparisons on data already in memory, so they stay on in release.
+
+**Verified by breaking it on purpose:** with `SAS_SETTLE_SECS` set to an unstable 0.004, the watchdog reported "SAS on 'Test Stack' has not converged in 3 s — still rotating at 0.068 rad/s with no input". A check that has never been seen to fire is not a check.
+
 ### [2026-08-19] Gravity is a force producer, not Rapier's `gravity` setting
 **Decision:** `RapierConfiguration::gravity` is `Vec3::ZERO`. `celestial::body::apply_gravity` writes `m·μ/r²` into `PendingForces` alongside thrust and drag.
 

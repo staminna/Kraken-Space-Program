@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 mod celestial;
+mod diagnostics;
 mod part_modules;
 mod physics;
 mod rendering;
@@ -105,6 +106,7 @@ fn main() {
             part_modules::PartModulesPlugin,
             vessel::VesselPlugin,
             ui::UiPlugin,
+            diagnostics::DiagnosticsPlugin,
         ))
         .add_systems(Startup, setup_launch_site)
         .run();

@@ -102,7 +102,14 @@ pub fn spawn_test_rocket(
                 name: "Test Stack".into(),
             },
             ActiveVessel,
-            ControlState::default(),
+            // SAS on from the pad. A rocket that will not hold the attitude you point it at
+            // is not flyable with a keyboard, and there is no reason to make the player
+            // discover that and then discover the fix. Debris gets `default()`, which is
+            // off — a discarded stage should tumble.
+            ControlState {
+                sas: true,
+                ..default()
+            },
             CurrentStage(0),
         ))
         .id();

@@ -104,6 +104,7 @@ impl Plugin for PhysicsPlugin {
             })
             .add_message::<joints::JointFailure>()
             .add_message::<impact::Impact>()
+            .init_resource::<joints::PeakJointLoad>()
             .add_systems(Startup, configure_rapier)
             .add_systems(Update, debug_timestep_drift)
             .configure_sets(
