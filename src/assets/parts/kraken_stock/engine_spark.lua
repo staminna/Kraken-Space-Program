@@ -4,7 +4,7 @@ part {
 
   -- Paths are relative to this file's own directory. No mesh authored yet; the loader
   -- warns and substitutes a primitive.
-  geometry = "engine_spark.glb",
+  shape = { kind = "engine", radius = 0.3125 },
   
   display_name = "48-7S \"Spark\" RP-1 engine",
   manufacturer = "Seraphina Aerospace Industries",
@@ -17,7 +17,7 @@ part {
   attach_nodes = {
 
     top = {
-      position         = vec3(0, 0, 0),  -- model not produced yet, centered at top of engine.
+      position         = vec3(0, 0.35, 0),  -- top of the engine body
       size             = 1,  -- 0.625m size
       tensile_strength = 90.0,  -- kN before joint breaks under pull
       shear_strength   = 67.5,  -- kN before joint breaks under shear

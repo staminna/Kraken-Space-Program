@@ -10,7 +10,7 @@ part {
   author = "Claude",
 
   -- No mesh authored yet; the loader warns and substitutes a placeholder.
-  geometry = "engine_reliant.glb",
+  shape = { kind = "engine", radius = 0.625 },
 
   display_name = "RE-M3 \"Reliant\" RP-1 engine",
   manufacturer = "Seraphina Aerospace Industries",

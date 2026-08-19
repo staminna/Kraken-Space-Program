@@ -26,6 +26,7 @@ use crate::vessel::components::{
     ActiveVessel, AttachedBelow, ControlState, CurrentStage, FuelGroup, PartConnections, PartId,
     PartMass, PartVisual, RootPart, Vessel, VesselId,
 };
+use crate::vessel::geometry;
 
 /// Height above the pad the stack is spawned at, metres.
 ///
@@ -224,7 +225,7 @@ fn spawn_part(
 ) -> (Entity, Entity) {
     let half_height =
         ((top_of(definition).y - bottom_of(definition)) / 2.0 - COLLIDER_GAP_M).max(0.05);
-    let radius = node_radius(definition);
+    let radius = definition.shape.radius_m;
     // The part's origin is not necessarily its geometric centre — the Spark's nodes run
     // from 0 to -0.5 — so the collider is offset to sit between the nodes rather than
     // straddling the origin.
@@ -242,11 +243,7 @@ fn spawn_part(
             PendingForces::default(),
             Transform::from_translation(position.as_vec3()),
             RigidBody::Dynamic,
-            Collider::compound(vec![(
-                Vec3::new(0.0, centre_offset as f32, 0.0),
-                Quat::IDENTITY,
-                Collider::cylinder(half_height as f32, radius as f32),
-            )]),
+            geometry::collider_for(&definition.shape, half_height, centre_offset),
             AdditionalMassProperties::Mass(definition.dry_mass_kg as f32),
             ExternalForce::default(),
             Velocity::default(),
@@ -297,7 +294,6 @@ fn spawn_part(
         part,
         position,
         half_height,
-        radius,
         centre_offset,
         meshes,
         materials,
@@ -362,7 +358,6 @@ fn spawn_visual(
     part: Entity,
     position: DVec3,
     half_height: f64,
-    radius: f64,
     centre_offset: f64,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
@@ -413,12 +408,20 @@ fn spawn_visual(
             ));
         }
         None => {
-            commands.spawn((
-                Mesh3d(meshes.add(Cylinder::new(radius as f32, (half_height * 2.0) as f32))),
-                MeshMaterial3d(materials.add(placeholder_material(definition))),
-                offset,
-                ChildOf(visual),
-            ));
+            // Built from the part's declared shape, which is also what the collider came
+            // from — so what you see is what you hit. No warning: a shape is a complete
+            // description of a part, not a stand-in for a missing one.
+            let base = placeholder_material(definition);
+            for piece in geometry::mesh_for(&definition.shape, half_height * 2.0, centre_offset) {
+                let mut material = base.clone();
+                material.base_color = shade(material.base_color, piece.shade);
+                commands.spawn((
+                    Mesh3d(meshes.add(piece.mesh)),
+                    MeshMaterial3d(materials.add(material)),
+                    Transform::from_translation(piece.offset),
+                    ChildOf(visual),
+                ));
+            }
         }
     }
 
@@ -481,17 +484,13 @@ fn bottom_of(definition: &PartDefinition) -> f64 {
     bottom_of_vec(definition).y
 }
 
-/// Collider radius from the attach node size class: 1 = 0.625 m, 2 = 1.25 m diameter.
-fn node_radius(definition: &PartDefinition) -> f64 {
-    let size = definition
-        .attach_nodes
-        .iter()
-        .map(|node| node.size)
-        .max()
-        .unwrap_or(1);
-    match size {
-        1 => 0.3125,
-        2 => 0.625,
-        other => 0.625 * f64::from(other) / 2.0,
-    }
+/// Darkens a colour, so recessed pieces of a placeholder mesh read as recesses.
+fn shade(color: Color, factor: f32) -> Color {
+    let linear = color.to_linear();
+    Color::linear_rgba(
+        linear.red * factor,
+        linear.green * factor,
+        linear.blue * factor,
+        linear.alpha,
+    )
 }

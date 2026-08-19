@@ -34,9 +34,12 @@ pub struct PartDefinition {
     pub categories: Vec<String>,
     /// Dry mass in **kilograms** (Lua declares tonnes).
     pub dry_mass_kg: f64,
-    /// Mesh path relative to the asset root, e.g. `parts/kraken_stock/fueltank_1.glb`.
-    /// `None` means "no mesh authored yet" — assembly substitutes a primitive.
+    /// Optional `.glb` **visual** override, relative to the asset root. `None` means the
+    /// part is drawn from its [`shape`](Self::shape), which most parts are. A mesh never
+    /// affects collision — see `sdk::shape` for why that separation matters.
     pub geometry: Option<String>,
+    /// Authoritative geometry: drives the collider and the placeholder mesh alike.
+    pub shape: crate::sdk::shape::PartShape,
     pub attach_nodes: Vec<AttachNode>,
     pub modules: Vec<PartModuleDef>,
     /// Drag coefficient, dimensionless. Lua may declare `drag_coefficient`; the default is

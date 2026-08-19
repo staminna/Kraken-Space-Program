@@ -116,6 +116,10 @@ fn parse_part(table: &Table, asset_dir: &str) -> mlua::Result<PartDefinition> {
         None => Vec::new(),
     };
 
+    // Attach-node size is the fallback diameter, so a part that predates `shape` keeps
+    // exactly the radius it already had.
+    let shape = crate::sdk::shape::parse(table, &id, stock_radius_for(&attach_nodes))?;
+
     Ok(PartDefinition {
         display_name: table
             .get::<Option<String>>("display_name")?
@@ -136,8 +140,22 @@ fn parse_part(table: &Table, asset_dir: &str) -> mlua::Result<PartDefinition> {
         geometry,
         attach_nodes,
         modules,
+        shape,
         id,
     })
+}
+
+/// Radius implied by a part's largest attach node, metres.
+///
+/// The stock diameters: size 1 is 0.625 m across, size 2 is 1.25 m. Used only when a part
+/// does not declare a shape radius of its own.
+fn stock_radius_for(nodes: &[AttachNode]) -> f64 {
+    let size = nodes.iter().map(|node| node.size).max().unwrap_or(1);
+    match size {
+        1 => 0.3125,
+        2 => 0.625,
+        other => 0.625 * f64::from(other) / 2.0,
+    }
 }
 
 /// `attach_nodes` is a table keyed by node name, not an array — the key *is* the node's

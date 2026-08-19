@@ -2,7 +2,8 @@ part {
   id = "kraken.fueltank.small.03",
   author = "Graph",
 
-  geometry = "fueltank_1.glb",
+  geometry = "fueltank_1.glb",  -- optional visual override; the shape below is what collides
+  shape = { kind = "cylinder", radius = 0.625 },
 
   display_name = "RP-FT-200 Basic Small Fuel Tank (medium length)",
   manufacturer = "Seraphina Aerospace Industries",

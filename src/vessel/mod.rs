@@ -8,6 +8,7 @@ pub mod assembly;
 pub mod components;
 pub mod control;
 pub mod damage;
+pub mod geometry;
 pub mod staging;
 
 pub struct VesselPlugin;

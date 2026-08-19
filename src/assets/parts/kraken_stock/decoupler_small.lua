@@ -3,7 +3,7 @@ part {
   author = "Claude",
 
   -- No mesh authored yet; the loader warns and substitutes a primitive.
-  geometry = "decoupler_small.glb",
+  shape = { kind = "decoupler", radius = 0.625 },
 
   display_name = "TD-12 Stack Decoupler",
   manufacturer = "Seraphina Aerospace Industries",

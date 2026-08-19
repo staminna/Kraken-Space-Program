@@ -19,6 +19,7 @@ pub mod api;
 pub mod loader;
 pub mod part_def;
 pub mod sandbox;
+pub mod shape;
 
 pub struct SdkPlugin;
 
