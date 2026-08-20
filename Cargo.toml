@@ -39,3 +39,13 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+
+# `block` is not ours and not even a direct dependency — it arrives under
+# wgpu's Metal backend (bevy → wgpu → wgpu-hal → metal → block). Upstream declares a static
+# of an uninhabited type, which rustc is turning into a hard error, so every macOS build
+# warns and a future toolchain will fail outright. 0.1.6 is the last release, from 2016, so
+# there is no version to move to: third_party/block is that release with the one line
+# fixed. Delete both when wgpu's Metal backend moves to objc2/block2 — cargo will warn that
+# the patch is unused.
+[patch.crates-io]
+block = { path = "third_party/block" }

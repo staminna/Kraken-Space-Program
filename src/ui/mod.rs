@@ -26,6 +26,20 @@ impl Plugin for UiPlugin {
     }
 }
 
+/// Size of the flight readout, in logical pixels.
+///
+/// Sized to be read at a glance from across a desk while flying, not to be efficient with
+/// screen space: the readout is the instrument panel, and numbers small enough to need
+/// looking *at* get ignored during the ten seconds when they matter. 24 px is roughly the
+/// smallest that stays legible on a 4K display without the window being scaled up.
+const READOUT_FONT_SIZE: f32 = 24.0;
+
+/// Size of the controls hint, in logical pixels.
+///
+/// Deliberately smaller than the readout — it is a reminder of the keys, read once and
+/// then ignored — but no longer small enough to be unreadable, which is what 13 px was.
+const HINT_FONT_SIZE: f32 = 17.0;
+
 /// Marks the HUD's readout text.
 #[derive(Component)]
 struct HudText;
@@ -40,7 +54,7 @@ fn spawn_hud(mut commands: Commands) {
         },
         Text::new("altitude   0 m"),
         TextFont {
-            font_size: 18.0,
+            font_size: READOUT_FONT_SIZE,
             ..default()
         },
         TextColor(Color::srgb(0.9, 0.95, 1.0)),
@@ -56,10 +70,10 @@ fn spawn_hud(mut commands: Commands) {
         },
         Text::new(
             "Shift/Ctrl throttle  ·  Z full  ·  X cut  ·  WASD steer  ·  QE roll  ·  \
-             T SAS  ·  Space stage  ·  right-drag orbit  ·  scroll zoom",
+             T SAS  ·  Space stage  ·  0 reset  ·  right-drag orbit  ·  scroll zoom",
         ),
         TextFont {
-            font_size: 13.0,
+            font_size: HINT_FONT_SIZE,
             ..default()
         },
         TextColor(Color::srgb(0.65, 0.68, 0.75)),

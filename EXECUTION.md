@@ -152,6 +152,15 @@ Things that can't move forward until a call is made. If you're unblocking one of
 
 Decisions made, with dates and reasoning. If you're wondering why something is the way it is, check here before asking.
 
+### [2026-08-19] `block` is vendored and patched, because there is nowhere else to fix it
+**Decision:** `third_party/block` holds `block` 0.1.6 with one line changed, and the root `Cargo.toml` points `[patch.crates-io]` at it.
+
+**Why:** every macOS build printed "the following packages contain code that will be rejected by a future version of Rust: block v0.1.6". The crate is nothing to do with us — it arrives as `bevy → wgpu → wgpu-hal → metal → block` — but the lint is not cosmetic: it declares `static _NSConcreteStackBlock` with the uninhabited type `enum Class {}`, and when rust-lang/rust#74840 becomes a hard error that crate stops compiling and takes the Metal backend, and therefore the game on macOS, with it.
+
+**Why not upstream:** 0.1.6 is the last release and it is from 2016. `metal` 0.32 is what `wgpu-hal` 27 pins and Bevy 0.18 pins that wgpu, so there is no version to move to and no maintainer to move it. The fix is an inhabited zero-sized `#[repr(C)] struct Class` — only the static's address is ever taken, as a stack block's `isa` pointer, so nothing about the behaviour changes.
+
+**Cost:** ~350 lines of MIT code we now carry, and the lint cap in that crate's manifest (path dependencies do not get `--cap-lints allow`, so its 2016-era `extern fn` declarations would otherwise add 46 warnings of their own). The removal signal is automatic: when wgpu's Metal backend moves to `objc2`/`block2`, cargo warns that the patch is unused. Delete the directory and the `[patch]` section then.
+
 ### [2026-08-19] Attitude authority comes from parts, not from a constant
 **Decision:** `ReactionWheel` is a part module. A vessel's control torque is the sum of its wheels; each applies its own share; a vessel with none cannot steer.
 

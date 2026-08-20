@@ -1,4 +1,4 @@
-//! Vessels — assembly, control input, and staging.
+//! Vessels — assembly, control input, staging, and putting it all back on the pad.
 
 use bevy::prelude::*;
 
@@ -9,6 +9,7 @@ pub mod components;
 pub mod control;
 pub mod damage;
 pub mod geometry;
+pub mod reset;
 pub mod staging;
 
 pub struct VesselPlugin;
@@ -27,7 +28,11 @@ impl Plugin for VesselPlugin {
             )
             .add_systems(
                 Update,
-                (control::read_control_input, staging::request_stage),
+                (
+                    control::read_control_input,
+                    staging::request_stage,
+                    reset::reset_flight,
+                ),
             )
             .add_systems(
                 FixedUpdate,
