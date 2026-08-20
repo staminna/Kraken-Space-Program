@@ -69,6 +69,15 @@ pub struct ControlState {
     /// player is not steering. A damper, not a heading hold — see
     /// [`apply_attitude_control`](crate::vessel::control::apply_attitude_control).
     pub sas: bool,
+    /// One-shot request to fire the next stage, cleared the moment it is consumed by
+    /// [`request_stage`](crate::vessel::staging::request_stage).
+    ///
+    /// A latch rather than a message because staging is *input*, and input belongs here
+    /// with the throttle and the control axes. The space bar sets it; so does the scripted
+    /// pilot, which is the point — the pilot is meant to fly with exactly the controls a
+    /// player has, and staging was the one action it could not reach, because
+    /// `StageActivated` used to be written straight from the keyboard.
+    pub stage: bool,
 }
 
 /// Which stage fires next when the player presses stage.

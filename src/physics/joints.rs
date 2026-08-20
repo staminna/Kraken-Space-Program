@@ -21,10 +21,13 @@
 //! Lua. What it does *not* do is decide what a failure means: it removes the joint and
 //! writes a [`JointFailure`], and `vessel::staging` turns that into two vessels.
 
+use bevy::ecs::system::SystemParam;
 use bevy::math::DVec3;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
+
+use crate::vessel::components::{ActiveVessel, VesselId};
 
 /// Break limits for the joint an entity owns, in newtons.
 ///
@@ -113,14 +116,26 @@ fn load_from_impulses(impulses: [f32; 3], dt_secs: f64) -> JointLoad {
     }
 }
 
-/// The most loaded joint in the simulation this tick, as a fraction of its own limit.
+/// The most loaded joint this tick, as a fraction of its own limit. 1.0 is the breaking
+/// point.
 ///
 /// Published so that diagnostics can report structural margin without reaching into Rapier —
 /// `physics/` is the only module allowed to do that, so it does the reading once and hands
-/// out the number. 1.0 means "at the breaking point".
+/// out the number.
+///
+/// # Why there are two numbers
+///
+/// The world-wide peak is what the watchdog wants: any joint in trouble is worth saying so,
+/// whoever owns it. It is emphatically *not* what a flight trace wants. A spent booster
+/// hitting the ground loads its joints to several times their limit, and on a first ascent
+/// that read as the vessel 100 km overhead carrying 308% of its breaking load — a number
+/// alarming enough to chase, attached to a vessel that was doing nothing but coasting.
 #[derive(Resource, Debug, Default, Clone, Copy)]
 pub struct PeakJointLoad {
+    /// Across every joint in the simulation, debris included.
     pub fraction_of_limit: f64,
+    /// Across the joints of the vessel the player is flying.
+    pub on_active_vessel: f64,
 }
 
 /// Load fraction at which a joint is close enough to failing to be worth saying so.
@@ -153,6 +168,25 @@ pub struct FailureDetectorState {
     last_warned_secs: f64,
 }
 
+/// The live joints, and enough of the part graph to tell whose they are.
+///
+/// Grouped so [`detect_joint_failures`] keeps a signature somebody can read.
+#[derive(SystemParam)]
+pub struct JointLoads<'w, 's> {
+    joints: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static JointStrength,
+            &'static RapierImpulseJointHandle,
+            &'static ImpulseJoint,
+        ),
+    >,
+    owners: Query<'w, 's, &'static VesselId>,
+    active: Query<'w, 's, Entity, With<ActiveVessel>>,
+}
+
 /// Breaks joints whose load exceeded the limits from their Lua definition.
 ///
 /// # Ordering
@@ -162,12 +196,7 @@ pub struct FailureDetectorState {
 pub fn detect_joint_failures(
     mut commands: Commands,
     context: Query<&RapierContextJoints>,
-    joints: Query<(
-        Entity,
-        &JointStrength,
-        &RapierImpulseJointHandle,
-        &ImpulseJoint,
-    )>,
+    loaded: JointLoads,
     mut failures: MessageWriter<JointFailure>,
     // Rebuilt from the live joints every tick, so a joint that goes away — through staging,
     // through a failure, through the vessel being deleted — takes its counter with it.
@@ -180,6 +209,14 @@ pub fn detect_joint_failures(
         last_warned_secs,
     } = &mut *state;
     peak_load.fraction_of_limit = 0.0;
+    peak_load.on_active_vessel = 0.0;
+
+    let JointLoads {
+        joints,
+        owners,
+        active,
+    } = &loaded;
+    let active_vessel = active.single().ok();
 
     let Ok(context) = context.single() else {
         return;
@@ -187,7 +224,7 @@ pub fn detect_joint_failures(
 
     let mut still_present: HashSet<Entity> = HashSet::new();
 
-    for (part, strength, handle, joint) in &joints {
+    for (part, strength, handle, joint) in joints {
         still_present.insert(part);
 
         let Some(solver_joint) = context.impulse_joints.get(handle.0) else {
@@ -212,6 +249,10 @@ pub fn detect_joint_failures(
             fraction = fraction.max(load.shear_n / strength.shear_n);
         }
         peak_load.fraction_of_limit = peak_load.fraction_of_limit.max(fraction);
+        if active_vessel.is_some_and(|vessel| owners.get(part).is_ok_and(|owner| owner.0 == vessel))
+        {
+            peak_load.on_active_vessel = peak_load.on_active_vessel.max(fraction);
+        }
 
         let over_tension = strength.tensile_n > 0.0 && load.axial_n > strength.tensile_n;
         let over_shear = strength.shear_n > 0.0 && load.shear_n > strength.shear_n;
@@ -248,8 +289,16 @@ pub fn detect_joint_failures(
     let now = time.elapsed_secs_f64();
     if peak_load.fraction_of_limit > JOINT_LOAD_WARN_FRACTION && now - *last_warned_secs > 2.0 {
         *last_warned_secs = now;
+        // Which vessel it belongs to is most of the message. The first ascent produced
+        // "308% of its breaking load" from a spent booster hitting the ground while the
+        // vessel being flown was coasting through 106 km, untouched.
+        let whose = if peak_load.on_active_vessel >= peak_load.fraction_of_limit {
+            "the active vessel"
+        } else {
+            "another vessel"
+        };
         warn!(
-            "a joint is carrying {:.0}% of its breaking load",
+            "a joint on {whose} is carrying {:.0}% of its breaking load",
             peak_load.fraction_of_limit * 100.0
         );
     }

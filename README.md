@@ -99,6 +99,10 @@ Gravity falls off with altitude, the air thins out above you, parts shield each 
 airstream, and joints break when you overload them. A ballistic re-entry from 12 km peaks at
 around 300 m/s and *slows down* on the way in. It lands on its legs.
 
+**It reaches space.** Straight up on full throttle, the test stack drops its first stage at
+14 km on flameout and coasts through 70,000 m at t+140 s with propellant to spare — through
+seven origin shifts that leave no mark on the trace at all.
+
 **Controls:** `Shift`/`Ctrl` throttle · `Z`/`X` full/cut · `WASD` steer · `Q`/`E` roll · `T` SAS · `Space` stage · `0` reset · right-drag orbit · scroll zoom
 
 On a Mac trackpad, "right-drag" is usually Control-click-drag — and `Control` is throttle-down, so
@@ -111,8 +115,8 @@ want it and let go, and it stays there.
 save system yet, so it is that or restart the game between attempts.
 
 **Diagnosing a change:** `KRAKEN_TRACE=2` logs one line per physics tick, and
-`KRAKEN_PILOT=hop|ballistic|idle` flies a scripted profile so a landing is reproducible without a
-human at the keyboard. See EXECUTION.md.
+`KRAKEN_PILOT=ascent|hop|ballistic|idle` flies a scripted profile so a launch or a landing is
+reproducible without a human at the keyboard. See EXECUTION.md.
 
 **Phase 0 — Foundation** *(done)*
 - [x] Bevy project skeleton — window opens, nothing crashes
@@ -129,10 +133,11 @@ human at the keyboard. See EXECUTION.md.
 - [x] Staging — decouple, split into two vessels, fly on
 - [x] Krakensbane origin shifting
 - [x] Camera tracking and a placeholder HUD
-- [ ] Aerodynamic drag
-- [ ] Point-mass gravity
-- [ ] Crash detection
-- [ ] Structural failure (joints that break under load)
+- [x] Aerodynamic drag, with parts shielding each other from the airstream
+- [x] Point-mass gravity
+- [x] Crash detection
+- [x] Structural failure (joints that break under load)
+- [x] **Exit criterion met:** the stack reaches space — 70 km, staging on the way up
 
 The full roadmap lives in [`DESIGN.md`](DESIGN.md). Current tasks and decisions live in [`EXECUTION.md`](EXECUTION.md). Corners cut, and why, live in [`CHECKLIST.md`](CHECKLIST.md).
 

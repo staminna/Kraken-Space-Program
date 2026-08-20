@@ -176,7 +176,7 @@ fn record_tick(
         resource_container::vessel_mass_kg(vessel, &masses),
         body.gravity_at(position.0).length(),
         atmosphere.density_at(altitude),
-        peak_joint_load.fraction_of_limit,
+        peak_joint_load.on_active_vessel,
         if destroyed { " DESTROYED" } else { "" },
     );
 }

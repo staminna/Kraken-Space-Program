@@ -52,7 +52,10 @@ before anyone could see them. Use these before believing a physics change works:
 # One log line per physics tick, for the first N seconds — or "all" for the whole session.
 KRAKEN_TRACE=2 cargo run
 
-# Fly a scripted profile so a landing is reproducible without a human at the keyboard.
+# Fly a scripted profile so a launch or a landing is reproducible without a human at the
+# keyboard. The pilot flies with the controls a player has and nothing else — including
+# staging, which it requests through the same latch the space bar sets.
+KRAKEN_PILOT=ascent cargo run       # straight up to space, staging on flameout (~2.5 min)
 KRAKEN_PILOT=hop cargo run          # up 60 m, back down, soft landing
 KRAKEN_PILOT=hop KRAKEN_PILOT_DRIFT=1 cargo run   # ...with lateral drift to cope with
 KRAKEN_PILOT=ballistic cargo run    # burn to 6 km and let it fall: drag and impact damage
@@ -109,15 +112,61 @@ Don't start these until Phase 0 exit criteria are met (a sphere falls under grav
 - [x] `Part` entity spawning — from Lua definitions rather than a hardcoded Rust struct. The Lua loader was pulled forward from Phase 2; only the *arrangement* of the test stack is hardcoded.
 - [x] Part-to-part joint creation via the `joints` system
 - [x] `PendingForces` component + Rapier force application system
-- [ ] Point gravity (single body, inverse square) — still uniform 9.81 m/s² down
+- [x] Point gravity (single body, inverse square) — `celestial::body`, μ = g·r² about a 600 km sphere
 - [x] Thrust: `Engine` component reads throttle input, writes to `PendingForces`
-- [ ] Basic drag: `DragSurface` component, flat drag coefficient, writes to `PendingForces`
+- [x] Basic drag: `DragSurface` component, exponential atmosphere, occlusion between parts, writes to `PendingForces`
 - [x] Staging: `StageActivated` → `Decoupler` query → joint destruction → `VesselSplit`
 - [x] `VesselSplit` handler: reassign `VesselId` on affected parts, spawn new vessel entity
 - [x] Krakensbane: `WorldOrigin` shift when active vessel exceeds threshold
 - [x] Camera: follows `ActiveVessel`, basic orbital camera controls
-- [ ] Crash detection: `CollisionEvent` from Rapier → check impact velocity → `PartDestroyed` event
+- [x] Crash detection: `CollisionEvent` from Rapier → impact speed from the tick before → vessel destroyed
 - [x] Placeholder HUD: altitude, velocity, throttle — hardcoded positions, no Lua yet
+
+### Phase 1 exit criteria — measured, 2026-08-20
+
+DESIGN.md: *"A hardcoded multi-stage rocket can launch, reach space, and stage. No f32
+precision artifacts visible."* Both halves, from one run of `KRAKEN_PILOT=ascent
+KRAKEN_TRACE=all`, straight up on full throttle:
+
+| | |
+|---|---|
+| Launch | 5,919 kg, 140 kN, TWR 2.41 |
+| Max dynamic pressure | 27.7 kPa at 3,390 m, 288 m/s (t=22.3 s) |
+| Staging | 14,101 m, on the first stage flaming out at 35.7 of 140.0 kN — 3 parts, 1,450 kg dropped |
+| Peak joint load | 23% of limit, on the pad while settling. 22% in flight, at the staging tick |
+| Origin shifts | 7, at 10 km intervals from the pad to 70 km |
+| **Space** | **70,014 m at t=140.4 s, 744 m/s, 1,542 kg of propellant left** |
+| After cutoff | still climbing through 83.8 km when the recording stopped |
+| Watchdog | silent for the entire flight |
+
+**On the precision half.** The seven origin shifts are the interesting part: the altitude and
+speed traces are continuous across every one, tick to tick, with nothing to mark the frame
+the whole world moved 10 km. That is now pinned by tests in `physics/krakensbane.rs` as well
+as observed — and writing them corrected a claim this repo had been making. The module said
+a shift moves nothing at all. It moves the *active vessel* nothing at all, exactly, because
+the shift is taken about the mean of that vessel's own parts and subtracting two nearby f32
+values never rounds. A body far from that centre does move, by up to half an f32 ULP —
+0.4 mm measured at 12.6 km. Below anything this engine resolves, but a bound rather than
+nothing, and worth stating honestly.
+
+**Still labelled "in progress".** Every task box above is ticked and the exit criterion is
+measured, so what is left is the ritual in "Before closing a phase" further down — chiefly
+the review of provisional numbers, of which this phase accumulated a lot: `SAFE_IMPACT_SPEED_MS`,
+`TICKS_OVER_LIMIT_BEFORE_FAILURE`, `SAS_SETTLE_SECS`, `ORIGIN_SHIFT_THRESHOLD_M`, the stock
+parts' strengths, and the Reliant's entire balance (CHECKLIST #9). Stamping the phase closed
+is that review, not this flight.
+
+**What the flight found.** Every engine on a vessel burns whenever the throttle is open;
+nothing ties ignition to a stage. The upper stage's Spark therefore runs from the pad,
+burning its own propellant to lift the first stage, and "stage when thrust reaches zero"
+never fires because the upper engine is still producing 20 kN. Logged as CHECKLIST #26; the
+ascent profile stages on *partial* thrust loss instead, which is correct regardless.
+
+The per-tick trace's `joint=` column was also reporting the worst joint anywhere in the
+world, so the spent booster hitting the ground at 89.6 m/s read as the vessel 106 km
+overhead carrying 308% of its breaking load. `PeakJointLoad` now carries both figures: the
+world-wide peak for the watchdog, which should shout about any vessel, and the active
+vessel's own for the trace, which claims to be about the vessel you are flying.
 
 Pulled forward from Phase 2 because the part definitions already existed and hardcoding
 them in Rust would have meant writing content twice:
@@ -151,6 +200,15 @@ Things that can't move forward until a call is made. If you're unblocking one of
 ## Decision Log
 
 Decisions made, with dates and reasoning. If you're wondering why something is the way it is, check here before asking.
+
+### [2026-08-20] Staging is an input, not a keystroke
+**Decision:** `ControlState` carries a one-shot `stage` latch. `staging::request_stage` fires on the space bar *or* that latch, clears it, and is still the only thing that writes `StageActivated` or increments `CurrentStage`.
+
+**Why:** `StageActivated` used to be written straight from `keys.just_pressed(Space)`, which meant staging was the one action reachable only by a human hand. The scripted pilot — the fixture that exists precisely so flight behaviour can be verified without one — could not stage, so every automated profile ever flown was a single stage under 6 km. Phase 1's exit criterion is a *multi-stage* rocket reaching space, and it could not be tested by the thing built to test flights.
+
+The latch puts staging where the throttle and the control axes already are: input, latched in one place, consumed in one place. The pilot's contract stays literally true — it writes `ControlState` and nothing else — and there is no second path to a stage event to keep in sync.
+
+**Not a message from the pilot:** the obvious alternative is to let the pilot write `StageActivated` itself. That duplicates the `CurrentStage` increment, and a vessel that increments twice for one press skips a stage — the kind of bug that surfaces on the one flight nobody was watching.
 
 ### [2026-08-19] `block` is vendored and patched, because there is nowhere else to fix it
 **Decision:** `third_party/block` holds `block` 0.1.6 with one line changed, and the root `Cargo.toml` points `[patch.crates-io]` at it.
@@ -266,13 +324,9 @@ The watchdog is the half that matters: it fires without anyone suspecting anythi
 
 ## Known Tech Debt
 
-Corners cut consciously. Every item here was intentional. Future contributors: these are not bugs, they are decisions. If you fix one, remove it from this list and note what you did in the commit message.
-
-*This section starts empty. The first entry gets written the first time someone types "TODO: fix this later" in the codebase.*
-
-| # | Description | Where | Cut in Phase | Should be fixed by Phase |
-|---|-------------|-------|--------------|--------------------------|
-| — | — | — | — | — |
+**Lives in [`CHECKLIST.md`](CHECKLIST.md).** It started here as an empty table waiting for
+its first entry; by the time it had eighteen, the same list existed in two files and only
+one of them was being kept up. One list, in the file whose entire job is to hold it.
 
 ---
 

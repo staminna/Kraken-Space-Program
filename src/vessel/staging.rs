@@ -31,19 +31,30 @@ pub struct VesselSplit {
     pub separated: Entity,
 }
 
-/// Space bar → [`StageActivated`].
+/// Space bar, or [`ControlState::stage`], → [`StageActivated`].
+///
+/// Both routes land here rather than each writing the message, so that incrementing
+/// [`CurrentStage`] happens in exactly one place. A vessel that staged twice from one press
+/// would skip a stage entirely, and that is the kind of bug that only shows up in the one
+/// flight nobody was watching.
 pub fn request_stage(
     keys: Res<ButtonInput<KeyCode>>,
-    mut vessels: Query<&mut CurrentStage, With<ActiveVessel>>,
+    mut vessels: Query<(&mut CurrentStage, &mut ControlState), With<ActiveVessel>>,
     mut staged: MessageWriter<StageActivated>,
 ) {
-    if !keys.just_pressed(KeyCode::Space) {
-        return;
-    }
-
-    let Ok(mut stage) = vessels.single_mut() else {
+    let Ok((mut stage, mut control)) = vessels.single_mut() else {
         return;
     };
+
+    // Read through `Deref` and write only when the latch was actually set, so a vessel
+    // nobody is staging is not marked as changed every frame.
+    let requested = control.stage;
+    if requested {
+        control.stage = false;
+    }
+    if !requested && !keys.just_pressed(KeyCode::Space) {
+        return;
+    }
 
     staged.write(StageActivated(stage.0));
     stage.0 += 1;
