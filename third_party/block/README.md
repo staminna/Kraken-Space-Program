@@ -1,7 +1,17 @@
 # `block`, vendored
 
-Upstream: <http://github.com/SSheldon/rust-block>, version 0.1.6, MIT licensed. The
+Upstream: <http://github.com/SSheldon/rust-block>, version 0.1.6, by Steven Sheldon. The
 original README is kept alongside this one as `README.upstream.md`.
+
+## Licence
+
+MIT, as declared in upstream's own `Cargo.toml` and on crates.io. There is no licence file
+to reproduce here: upstream publishes none — not in the repository, not in the packaged
+`.crate` — so the declaration in the manifest is the whole of it, and this copy carries the
+same declaration in its own `Cargo.toml`. Writing out an MIT notice with a copyright line
+nobody upstream ever wrote would be inventing a legal notice on the author's behalf, which
+is worse than pointing at what actually exists. What is reproduced instead is provenance:
+name, version, author, upstream URL, and precisely what was changed.
 
 ## Why this is in the repository
 
