@@ -249,13 +249,16 @@ This is the direct inversion of KSP1's pattern where `Part.cs` was responsible f
 
 ### Staging
 
-A `Decoupler` component holds the attach node it controls and the stage number it fires on. When the active stage increments, a `StageActivated(u32)` event fires. The staging system queries all `Decoupler` components matching the current stage, destroys their joints via the joints system, which fires `VesselSplit` events. Part tree updates, vessel reassignment, and Rapier changes all flow from events. There is no method call chain inside a monolith.
+A `Decoupler` component holds the attach node it controls and the stage number it fires on. Asking to stage is *input*: it sets a one-shot `stage` latch on `ControlState`, alongside the throttle and the control axes, and `staging::request_stage` is the only thing that turns that latch — or the space bar — into a `StageActivated(u32)` event and an incremented `CurrentStage`. One path, so a scripted pilot stages exactly the way a player does and neither can skip a stage. The staging system queries all `Decoupler` components matching the current stage, destroys their joints via the joints system, which fires `VesselSplit` events. Part tree updates, vessel reassignment, and Rapier changes all flow from events. There is no method call chain inside a monolith.
 
 ---
 
 ## Module Structure
 
 Keep modules focused. A module owns one concept.
+
+This is the shape the code grows into, not an inventory of what exists today. Entries that
+are listed and absent from the repository are planned; everything that exists is listed.
 
 ```
 src/
@@ -269,6 +272,8 @@ src/
     krakensbane.rs          -- Origin shifting for floating point precision
     colliders.rs            -- Collider generation from part meshes
     forces.rs               -- PendingForces accumulation + Rapier application
+    readback.rs             -- Rapier transforms → SimPosition each tick
+    impact.rs               -- Contacts → impact speeds (read from the tick before)
     
   orbital/
     mod.rs
@@ -282,7 +287,11 @@ src/
     components.rs           -- Vessel, Part components (data only)
     assembly.rs             -- Building a vessel entity tree from a part definition
     systems.rs              -- Vessel-level systems (mass update, CoM)
+    control.rs              -- Input → ControlState → attitude torque
     staging.rs              -- Stage separation logic
+    damage.rs               -- Impact speed → vessel destruction
+    geometry.rs             -- Colliders and placeholder meshes from a part's declared shape
+    reset.rs                -- Throw the flight away and rebuild it on the pad
     symmetry.rs             -- Editor symmetry groups
     
   part_modules/
@@ -290,12 +299,14 @@ src/
     engine.rs               -- Engine component + thrust system
     resource_container.rs   -- Fuel/resource storage + flow system
     decoupler.rs            -- Decoupler component + staging integration
+    reaction_wheel.rs       -- Attitude authority; a vessel's is the sum of its wheels
     rcs.rs                  -- RCS thrusters
     -- one file per module type; adding a new part type = adding a file here
     
   celestial/
     mod.rs
     body.rs                 -- CelestialBody component + data
+    occlusion.rs            -- Which parts shield which from the airstream
     terrain/
       mod.rs
       quadtree.rs           -- LOD quadtree structure
@@ -314,10 +325,13 @@ src/
       vessels.rs
       ui.rs
     loader.rs               -- Loads .lua part/planet definitions at startup
+    part_def.rs             -- The Rust-side shape of a part definition (SI units)
+    shape.rs                -- Declared part geometry: cylinder, engine, nose cone, leg
     
   rendering/
     mod.rs
     render_sync.rs          -- THE ONLY FILE that converts f64 SimPosition → f32 Transform
+    camera.rs               -- Orbit camera that follows the active vessel
     atmosphere_pipeline.rs
     terrain_pipeline.rs
     
@@ -329,6 +343,10 @@ src/
       v0_to_v1.rs
       -- one file per version increment, no skipping
     
+  diagnostics/
+    mod.rs                  -- Always-on flight watchdog + KRAKEN_TRACE per-tick recorder
+    test_pilot.rs           -- Scripted profiles, flying with the controls a player has
+
   ui/
     mod.rs
     -- UI is primarily Lua-driven; minimal Rust here, mostly event bridges
@@ -340,7 +358,12 @@ src/
 **Dependency rules:**
 
 - `orbital/` has zero dependencies on `rendering/` or `physics/`
-- `physics/` has zero dependencies on `rendering/` or `sdk/`
+- `physics/` has zero dependencies on `sdk/`, and none on `rendering/` beyond the
+  coordinate types themselves — `SimPosition`, `SimVelocity`, `WorldOrigin`, `LocalOrigin`.
+  Those are simulation types that happen to live in `render_sync.rs` because that file is
+  the single conversion point, and `physics/{readback,krakensbane,impact}.rs` import them.
+  Nothing else from `rendering/` — no camera, no materials, no pipelines — may be imported.
+  Whether the coordinate types should move somewhere neutral instead is CHECKLIST #27.
 - `sdk/` talks to the rest of the engine only through ECS events — never direct function calls into other modules
 - `render_sync.rs` is the only file that imports from both `physics/` (for `SimPosition`) and touches `Transform`
 - `networking/` is isolated behind a feature flag until Phase 5
