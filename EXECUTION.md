@@ -68,6 +68,18 @@ without it.
 
 CI runs `fmt`, `clippy`, and `test` on every push. A red CI blocks merging. No exceptions.
 
+**Do not try to check the Linux leg from macOS.** `cargo check --target
+x86_64-unknown-linux-gnu` gets 22 crates in and stops: `wayland-sys` wants Linux system
+libraries through pkg-config, and with the windowing backends disabled it stops again on
+`lua-src`, which wants an `x86_64-linux-gnu-gcc` to build vendored Lua. Both are build
+scripts of third-party crates, not anything this project controls, and getting past them
+means installing a full cross-compilation toolchain. The ubuntu leg of CI is the check. It
+costs little to be sure of that, because there is no `cfg(target_os)`, `cfg(unix)` or
+`cfg(windows)` anywhere in `src/` — the only platform-specific line in the repository is the
+`[patch.crates-io]` for `block`, and `block` is not in the Linux build graph at all
+(`cargo tree --target x86_64-unknown-linux-gnu` confirms it, and emits no unused-patch
+warning either).
+
 ---
 
 ## Currently Active — Phase 1
